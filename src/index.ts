@@ -1,4 +1,5 @@
 import puppeteer from "@cloudflare/puppeteer";
+import { Buffer } from "node:buffer";
 
 export interface Env {
   // Browser Run binding. workers-types does not export a stable type for it
