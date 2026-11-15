@@ -1,0 +1,19 @@
+{
+  "description": "Virtual private browser: open any link on a remote server so you never have to open it in your own browser. Stage 1 is a safe link preview on Cloudflare Browser Run.",
+  "devDependencies": {
+    "@cloudflare/puppeteer": "^2.0.0",
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "@playwright/test": "^1.49.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^3.72.0"
+  },
+  "name": "virtual-browser",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "version": "0.1.0"
+}
