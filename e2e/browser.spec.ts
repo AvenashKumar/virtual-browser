@@ -63,6 +63,10 @@ test.describe("Virtual Browser", () => {
   });
 
   test("preview in the UI shows a screenshot and saves history", async ({ page }) => {
+    // The API preview test above just created a browser. The free Browser
+    // Rendering plan allows one new browser every 20 seconds, so wait before
+    // opening another one, or this preview gets a 429.
+    await new Promise((r) => setTimeout(r, 25000));
     await page.goto("/");
     await page.locator("#url").fill("https://example.com");
     await page.locator("#open-btn").click();
