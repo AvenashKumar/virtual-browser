@@ -1,0 +1,65 @@
+:root {
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --ink: #0F172A;
+  --muted: #64748B;
+  --primary: #4F46E5;
+  --primary-hover: #6366F1;
+  --accent: #2DD4BF;
+  --border: #E2E8F0;
+  --hero-start: #0B1526;
+  --hero-end: #3730A3;
+}
+[data-theme="dark"] {
+  --bg: #0B1526;
+  --surface: #1E293B;
+  --ink: #F1F5F9;
+  --muted: #94A3B8;
+  --primary: #6366F1;
+  --border: #334155;
+  --hero-start: #0B1526;
+  --hero-end: #1E1B4B;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Manrope, system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+.container { max-width: 1150px; margin: 0 auto; padding: 0 20px; }
+.header { background: var(--surface); border-bottom: 1px solid var(--border); }
+.header-inner { display: flex; align-items: center; gap: 24px; min-height: 60px; }
+.logo { font-weight: 800; font-size: 20px; color: var(--ink); text-decoration: none; }
+.header nav { margin-left: auto; display: flex; gap: 16px; }
+.header nav a { color: var(--muted); text-decoration: none; font-weight: 600; }
+.theme-toggle { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.theme-toggle button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; cursor: pointer; font-weight: 600; }
+.theme-toggle button.active { background: var(--primary); color: #fff; }
+.hero { background: linear-gradient(135deg, var(--hero-start), var(--hero-end)); color: #fff; border-radius: 16px; padding: 48px 32px; margin: 32px 0 24px; }
+.hero h1 { margin: 0 0 12px; font-size: 40px; line-height: 1.1; }
+.hero p { margin: 0; color: #E2E8F0; font-size: 18px; max-width: 700px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+.request-bar { display: flex; gap: 12px; }
+.request-bar input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 999px; font: inherit; background: var(--bg); color: var(--ink); }
+.btn { border: 0; border-radius: 999px; padding: 12px 24px; font: inherit; font-weight: 700; cursor: pointer; }
+.btn-primary { background: linear-gradient(135deg, #4F46E5, #8B5CF6, #D946EF); color: #fff; }
+.btn-secondary { background: var(--bg); color: var(--ink); border: 1px solid var(--border); padding: 8px 16px; }
+.examples { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.examples button { border: 1px solid var(--border); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; }
+.options { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 20px; color: var(--muted); }
+.muted { color: var(--muted); }
+.error { color: #DC2626; font-weight: 600; }
+.hidden { display: none; }
+.verdict { font-weight: 700; font-size: 18px; }
+.safety { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.safety span { border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+.shot { max-width: 100%; border: 1px solid var(--border); border-radius: 12px; margin: 12px 0; }
+.tabs { display: flex; gap: 8px; margin-top: 16px; }
+.tab { border: 1px solid var(--border); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 8px 16px; cursor: pointer; font: inherit; font-weight: 600; }
+.tab.active { background: var(--primary); color: #fff; }
+.tab-body { white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-height: 400px; overflow: auto; }
+.history-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+.history-row button { border: 1px solid var(--border); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; }
+.footer { color: var(--muted); padding: 24px 0 48px; }
+.footer a { color: var(--primary); }
+@media (max-width: 640px) {
+  .hero h1 { font-size: 28px; }
+  .request-bar { flex-direction: column; }
+  .header-inner { flex-wrap: wrap; }
+}
