@@ -11,6 +11,13 @@ export interface Env {
 
 const PREVIEW_TIMEOUT_MS = 20000;
 
+// Stage 2 interactive sessions. keep_alive ceiling is 20 minutes per the
+// current Cloudflare Puppeteer docs (updated 2026-11-11). The Live View URL
+// expiry is only the deadline for STARTING a Live View connection, so 10
+// minutes gives the frontend ample time to embed it after start returns.
+const SESSION_KEEP_ALIVE_MS = 1200000;
+const LIVE_VIEW_EXPIRES_MS = 600000;
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -104,6 +111,34 @@ export function safetyCheck(rawUrl: string): { verdict: Verdict; score: number; 
   return { verdict, score, reasons, cleanedUrl };
 }
 
+// Shared URL check for session endpoints: same validation as the preview,
+// http or https only, private and local hosts blocked, tracking params
+// stripped, http upgraded to https unless the caller opts out. Returns a
+// Response to send on failure, or the cleaned URL and safety verdict.
+function sessionUrl(body: any): Response | { openUrl: URL; safety: ReturnType<typeof safetyCheck> } {
+  if (!body || typeof body.url !== "string") return json({ error: "url is required" }, 400);
+  let target: URL;
+  try {
+    target = new URL(body.url);
+    if (!["http:", "https:"].includes(target.protocol)) throw new Error("bad protocol");
+  } catch {
+    return json({ error: "Enter a valid http or https URL" }, 400);
+  }
+  if (isPrivateHost(target.hostname)) return json({ error: "Private and local addresses are blocked" }, 400);
+  const safety = safetyCheck(target.toString());
+  const openUrl = new URL(safety.cleanedUrl);
+  if (openUrl.protocol === "http:" && body.forceHttps !== false) openUrl.protocol = "https:";
+  return { openUrl, safety };
+}
+
+// Open a Live View URL in tab mode for a page already loaded in a session.
+// The returned devtoolsFrontendUrl is the URL the frontend embeds.
+async function liveViewUrl(page: any): Promise<string> {
+  const cdp = await page.createCDPSession();
+  const liveView = await cdp.send("Cloudflare.getLiveView", { mode: "tab", expiresInMs: LIVE_VIEW_EXPIRES_MS });
+  return liveView.devtoolsFrontendUrl as string;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -174,6 +209,124 @@ export default {
       const body = await request.json().catch(() => null) as any;
       if (!body || typeof body.url !== "string") return json({ error: "url is required" }, 400);
       return json(safetyCheck(body.url));
+    }
+
+    // Stage 2: interactive browser sessions over Browser Run Live View.
+    // One active session per visitor is enforced by the client, which holds
+    // the sessionId in localStorage. The Worker has no shared state (no D1
+    // or KV), so it cannot enforce a per-visitor limit server-side.
+
+    if (path === "/api/session/start" && request.method === "POST") {
+      const body = await request.json().catch(() => null) as any;
+      const checked = sessionUrl(body);
+      if (checked instanceof Response) return checked;
+      const { openUrl, safety } = checked;
+      const width = Math.min(1600, Math.max(320, Number(body.width || 1280)));
+      const height = Math.min(2000, Math.max(400, Number(body.height || 800)));
+
+      let browser: any = null;
+      try {
+        browser = await puppeteer.launch(env.BROWSER, { keep_alive: SESSION_KEEP_ALIVE_MS });
+        const page = await browser.newPage();
+        await page.setViewport({ width, height });
+        const response = await page.goto(openUrl.toString(), { waitUntil: "networkidle0", timeout: PREVIEW_TIMEOUT_MS }).catch(() => null);
+        const title = await page.title().catch(() => "");
+        const cdp = await page.createCDPSession();
+        const session = await cdp.send("Cloudflare.getSessionId");
+        const viewUrl = await liveViewUrl(page);
+        // Do NOT close the browser here: the session must stay alive for
+        // the visitor. It ends when the visitor calls /api/session/end, or
+        // when the 20 minute keep_alive idle timeout reaps it.
+        return json({
+          sessionId: session.sessionId as string,
+          liveViewUrl: viewUrl,
+          expiresAt: Date.now() + SESSION_KEEP_ALIVE_MS,
+          url: page.url(),
+          status: response ? response.status() : null,
+          title,
+          safety,
+        });
+      } catch (e: any) {
+        const msg = e?.message || "unknown error";
+        // A failed start must not leak a half-started session.
+        if (browser) await browser.close().catch(() => {});
+        if (/429|rate limit/i.test(msg)) {
+          return json({ error: "Browser Rendering is busy right now. The free plan allows one new browser every 20 seconds, so try again in a few seconds.", safety }, 429);
+        }
+        return json({ error: `Session start failed: ${msg}`, safety }, 502);
+      }
+    }
+
+    if (path === "/api/session/navigate" && request.method === "POST") {
+      const body = await request.json().catch(() => null) as any;
+      if (!body || typeof body.sessionId !== "string") return json({ error: "sessionId is required" }, 400);
+      const checked = sessionUrl(body);
+      if (checked instanceof Response) return checked;
+      const { openUrl, safety } = checked;
+
+      let browser: any = null;
+      try {
+        browser = await puppeteer.connect(env.BROWSER, body.sessionId);
+      } catch {
+        return json({ error: "Session not found or already closed" }, 404);
+      }
+      try {
+        const pages = await browser.pages();
+        const page = pages[0] || (await browser.newPage());
+        await page.goto(openUrl.toString(), { waitUntil: "networkidle0", timeout: PREVIEW_TIMEOUT_MS }).catch(() => null);
+        const title = await page.title().catch(() => "");
+        // A fresh Live View URL for the same target, in case the old one
+        // stopped working. The client keeps its embedded URL unless it
+        // needs to re-embed.
+        const viewUrl = await liveViewUrl(page);
+        return json({ sessionId: body.sessionId, url: page.url(), title, liveViewUrl: viewUrl, safety });
+      } catch (e: any) {
+        return json({ error: `Navigate failed: ${e?.message || "unknown error"}`, safety }, 502);
+      } finally {
+        // Disconnect only. browser.close() here would kill the session.
+        if (browser) await browser.disconnect().catch(() => {});
+      }
+    }
+
+    if (path === "/api/session/end" && request.method === "POST") {
+      const body = await request.json().catch(() => null) as any;
+      if (!body || typeof body.sessionId !== "string") return json({ error: "sessionId is required" }, 400);
+
+      let browser: any = null;
+      try {
+        browser = await puppeteer.connect(env.BROWSER, body.sessionId);
+      } catch {
+        // Connect failed: the session may already be gone (idle timeout
+        // or an earlier close). Check the live session list before
+        // reporting an error, so End Session stays idempotent.
+        const open: any[] = await puppeteer.sessions(env.BROWSER).catch(() => []);
+        const stillOpen = open.some((s) => s.sessionId === body.sessionId);
+        if (!stillOpen) return json({ sessionId: body.sessionId, closed: true, alreadyClosed: true });
+        return json({ error: "Could not connect to the session to close it" }, 502);
+      }
+      try {
+        // browser.close() ends the session for real: it frees the
+        // concurrency slot and stops billing, per the Browser Run docs
+        // (a session closed this way is recorded as NormalClosure).
+        await browser.close();
+        return json({ sessionId: body.sessionId, closed: true });
+      } catch (e: any) {
+        return json({ error: `Close failed: ${e?.message || "unknown error"}` }, 502);
+      }
+    }
+
+    if (path === "/api/session/limits" && request.method === "GET") {
+      try {
+        // The limits object carries activeSessions (with ids),
+        // allowedBrowserAcquisitions, maxConcurrentSessions, and
+        // timeUntilNextAllowedBrowserAcquisition. It does NOT expose
+        // remaining browser minutes, so a 429 on start stays the signal
+        // that the daily minutes are used up.
+        const limits: any = await puppeteer.limits(env.BROWSER);
+        return json({ limits });
+      } catch (e: any) {
+        return json({ error: `Could not read account limits: ${e?.message || "unknown error"}` }, 502);
+      }
     }
 
     if (path === "/" || path === "/index.html") return env.ASSETS.fetch(request);
