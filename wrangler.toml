@@ -16,7 +16,7 @@ routes = [
 directory = "./public"
 binding = "ASSETS"
 
-[[browser]]
+[browser]
 binding = "BROWSER"
 
 [vars]
