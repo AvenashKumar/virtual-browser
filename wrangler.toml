@@ -1,0 +1,23 @@
+# Virtual Browser, live at browse.avenash-kumar.com (planned)
+# Stage 1: safe link preview on Cloudflare Browser Run.
+# Browser Run gives headless Chrome on Cloudflare's network. Free plan
+# includes 10 browser minutes a day; Paid includes 10 hours a month.
+name = "virtual-browser"
+main = "src/index.ts"
+compatibility_date = "2024-06-20"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+routes = [
+  { pattern = "browse.avenash-kumar.com", custom_domain = true }
+]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[browser]]
+binding = "BROWSER"
+
+[vars]
+BASE_URL = "https://browse.avenash-kumar.com"
