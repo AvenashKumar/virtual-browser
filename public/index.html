@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Browser, open any link safely</title>
+<meta name="description" content="Open any link on a remote server, so you never have to open it in your own browser.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<header class="header">
+  <div class="container header-inner">
+    <a class="logo" href="/">Virtual Browser</a>
+    <nav><a href="https://go.avenash-kumar.com">Shortener</a><a href="https://http.avenash-kumar.com">Inspector</a></nav>
+    <div class="theme-toggle" role="group" aria-label="Theme">
+      <button type="button" id="theme-light" class="active">Light</button>
+      <button type="button" id="theme-dark">Dark</button>
+    </div>
+  </div>
+</header>
+<main class="container">
+  <section class="hero">
+    <h1>Open any link, without opening it yourself.</h1>
+    <p>Paste a link and it opens on a remote server instead of in your browser. The site never sees your IP, your cookies, or your logins. You get a screenshot, the readable text, and a safety verdict first.</p>
+  </section>
+
+  <section class="card">
+    <form id="open-form">
+      <div class="request-bar">
+        <input id="url" type="url" placeholder="https://example.com/some-link" required>
+        <button class="btn btn-primary" type="submit" id="open-btn">Open safely</button>
+      </div>
+      <div class="examples">
+        <span>Try:</span>
+        <button type="button" data-url="https://example.com">example.com</button>
+        <button type="button" data-url="https://en.wikipedia.org/wiki/Cloudflare">Wikipedia, Cloudflare</button>
+        <button type="button" data-url="http://secure-login.paypa1.com/signin?utm_source=mail&amp;fbclid=abc123">Suspicious link</button>
+      </div>
+      <div class="options">
+        <label><input type="checkbox" id="force-https" checked> Force HTTPS</label>
+        <label><input type="checkbox" id="strip-tracking" checked> Strip tracking tags</label>
+        <label>Viewport <select id="viewport"><option value="1280x800" selected>Desktop 1280x800</option><option value="768x1024">Tablet 768x1024</option><option value="390x844">Phone 390x844</option></select></label>
+      </div>
+    </form>
+    <p id="open-error" class="error hidden"></p>
+  </section>
+
+  <section id="result" class="card hidden">
+    <h2 id="r-title">Preview</h2>
+    <p id="r-verdict" class="verdict"></p>
+    <p id="r-meta" class="muted"></p>
+    <div id="r-safety" class="safety"></div>
+    <div id="r-risky" class="hidden">
+      <p class="muted">This link looks risky. The preview was not loaded. You can open the cleaned link in the remote browser anyway, or go back.</p>
+      <button class="btn btn-secondary" type="button" id="open-anyway">Open anyway, in the remote browser</button>
+    </div>
+    <div id="r-preview">
+      <img id="r-shot" alt="Screenshot of the opened page" class="shot hidden">
+      <p id="r-loading" class="muted">Opening on the remote server...</p>
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="text">Readable text</button>
+        <button type="button" class="tab" data-tab="links">Links on the page</button>
+      </div>
+      <pre class="tab-body" id="tab-text"></pre>
+      <div class="tab-body hidden" id="tab-links"></div>
+      <p><a id="r-original" href="#" target="_blank" rel="noopener">Open original in your own browser</a></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Session</h2>
+    <p class="muted">Links you opened in this session, stored only in your browser. Ending the session wipes them.</p>
+    <button class="btn btn-secondary" type="button" id="end-session">End session</button>
+    <div id="history"></div>
+  </section>
+
+  <section class="card">
+    <h2>How it works</h2>
+    <p><strong>Stage 1, this build:</strong> a headless Chrome on Cloudflare's network opens the link and sends back a screenshot, the text, and the links. Your browser never touches the site.</p>
+    <p><strong>Stage 2, later:</strong> a full interactive browser streamed to you as video, where you can click and type. That needs a server running Chrome per session.</p>
+    <p class="muted">Limits: the remote browser is identifiable as automation, so some sites will block it. Sessions are short, and private or local addresses are blocked. Free Browser Run time is 10 minutes a day.</p>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container">
+    <p>Built by <a href="https://www.avenash-kumar.com">Avenash Kumar</a>. Also try the <a href="https://go.avenash-kumar.com">Edge URL Shortener</a> and <a href="https://http.avenash-kumar.com">HTTP Inspector</a>. Code is on <a href="https://github.com/AvenashKumar">GitHub</a>.</p>
+  </div>
+</footer>
+<script src="/app.js"></script>
+</body>
+</html>
