@@ -89,6 +89,15 @@ export function safetyCheck(rawUrl: string): { verdict: Verdict; score: number; 
     score -= 10;
     reasons.push("The path uses sign-in or account wording, common in phishing links.");
   }
+  if (/sign[-_]?in|log[-_]?in|verify|account|secure/i.test(u.hostname)) {
+    score -= 15;
+    reasons.push("The host name uses sign-in or security wording, common in phishing links.");
+  }
+  const sld = parts.length >= 2 ? parts[parts.length - 2] : "";
+  if (/[a-z]\d|\d[a-z]/i.test(sld)) {
+    score -= 10;
+    reasons.push("The domain name mixes letters and numbers, a common lookalike trick.");
+  }
   score = Math.max(0, score);
   const verdict: Verdict = score >= 80 ? "safe" : score >= 50 ? "caution" : "risky";
   if (verdict === "safe" && reasons.length === 0) reasons.push("No risk signals found in the link itself.");
@@ -151,7 +160,11 @@ export default {
           screenshotBase64: shot ? Buffer.from(shot as Uint8Array).toString("base64") : null,
         });
       } catch (e: any) {
-        return json({ error: `Preview failed: ${e?.message || "unknown error"}`, safety }, 502);
+        const msg = e?.message || "unknown error";
+        if (/429|rate limit/i.test(msg)) {
+          return json({ error: "Browser Rendering is busy right now. The free plan allows one new browser every 20 seconds, so try again in a few seconds.", safety }, 429);
+        }
+        return json({ error: `Preview failed: ${msg}`, safety }, 502);
       } finally {
         if (browser) await browser.close().catch(() => {});
       }
