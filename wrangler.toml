@@ -1,5 +1,8 @@
 # Virtual Browser, live at browse.avenash-kumar.com (planned)
 # Stage 1: safe link preview on Cloudflare Browser Run.
+# Stage 2: interactive browser sessions over Browser Run Live View
+# (POST /api/session/start, /navigate, /end, GET /api/session/limits),
+# using the same BROWSER binding. No D1 or KV.
 # Browser Run gives headless Chrome on Cloudflare's network. Free plan
 # includes 10 browser minutes a day; Paid includes 10 hours a month.
 name = "virtual-browser"
