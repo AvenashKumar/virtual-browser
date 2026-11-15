@@ -5,7 +5,10 @@
 name = "virtual-browser"
 main = "src/index.ts"
 compatibility_date = "2024-06-20"
-compatibility_flags = ["nodejs_compat"]
+# enable_nodejs_fs_module: @cloudflare/puppeteer v2 imports node:fs at its
+# top level, and the Workers runtime only provides node:fs with this flag
+# on a compatibility date before 2025-09-01.
+compatibility_flags = ["nodejs_compat", "enable_nodejs_fs_module"]
 workers_dev = false
 
 routes = [
