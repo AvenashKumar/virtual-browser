@@ -1,5 +1,5 @@
 {
-  "description": "Virtual private browser: open any link on a remote server so you never have to open it in your own browser. Stage 1 is a safe link preview on Cloudflare Browser Run.",
+  "description": "Virtual private browser: open any link on a remote server so you never have to open it in your own browser. Stage 1 is a safe link preview on Cloudflare Browser Run. Stage 2 is an interactive browser session over Browser Run Live View.",
   "devDependencies": {
     "@cloudflare/puppeteer": "^2.0.0",
     "@cloudflare/workers-types": "^4.20240620.0",
