@@ -8,7 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/styles.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
 </head>
 <body>
 <header class="header">
@@ -23,15 +23,20 @@
 </header>
 <main class="container">
   <section class="hero">
-    <h1>Open any link, without opening it yourself.</h1>
-    <p>Paste a link and it opens on a remote server instead of in your browser. The site never sees your IP, your cookies, or your logins. You get a screenshot, the readable text, and a safety verdict first.</p>
+    <h1>Open a link, leave no trace here.</h1>
+    <p>Paste a link and it opens on a remote server instead of in your browser. The site never sees your IP, your cookies, or your logins.</p>
+  </section>
+
+  <section class="shield" aria-label="Privacy shield">
+    <span class="shield-label">Privacy shield</span>
+    <p>The site will see a remote browser, not your device, cookies or location. Nothing you open is saved anywhere except in this browser, and ending the session wipes it.</p>
   </section>
 
   <section class="card">
     <form id="open-form">
       <div class="request-bar">
-        <input id="url" type="url" placeholder="https://example.com/some-link" required>
-        <button class="btn btn-primary" type="submit" id="open-btn">Open safely</button>
+        <input id="url" type="url" placeholder="https://example.com/some-link" value="https://avenash-kumar.com/blog" required>
+        <button class="btn btn-primary" type="submit" id="open-btn">Open in a quiet window</button>
       </div>
       <div class="examples">
         <span>Try:</span>
@@ -50,6 +55,7 @@
 
   <section id="result" class="card hidden">
     <h2 id="r-title">Preview</h2>
+    <p id="r-shield" class="shield" style="margin: 12px 0;"></p>
     <p id="r-verdict" class="verdict"></p>
     <p id="r-meta" class="muted"></p>
     <div id="r-safety" class="safety"></div>
@@ -68,20 +74,46 @@
       <div class="tab-body hidden" id="tab-links"></div>
       <p><a id="r-original" href="#" target="_blank" rel="noopener">Open original in your own browser</a></p>
     </div>
+    <div id="session-start-wrap" class="hidden" style="margin-top: 20px;">
+      <button class="btn btn-primary" type="button" id="start-session">Start interactive session</button>
+      <p class="muted" style="margin: 8px 0 0;">Opens the page in a live remote browser you can click and type in, for up to 20 minutes.</p>
+      <p id="session-busy" class="error hidden">The remote browser is busy right now. Try again in a little while. <button class="btn btn-secondary" type="button" id="busy-retry">Check again</button></p>
+      <p id="session-error" class="error hidden"></p>
+      <p id="session-ended" class="muted hidden"></p>
+    </div>
+  </section>
+
+  <section id="live-session" class="card hidden">
+    <h2>Interactive session</h2>
+    <div class="session-bar">
+      <span class="timer" id="session-timer">20:00</span>
+      <span class="muted" id="session-status">Session starting...</span>
+      <button class="btn btn-primary" type="button" id="end-live-session">End session</button>
+    </div>
+    <form id="session-nav-form" class="session-address">
+      <input id="session-url" type="url" placeholder="https://example.com" required>
+      <button class="btn btn-secondary" type="submit" id="session-go">Go</button>
+    </form>
+    <iframe id="live-frame" class="live-frame" title="Live remote browser" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    <div id="session-fallback" class="fallback hidden">
+      <p><strong>The live page could not be embedded here.</strong> You can still use the session in a new tab.</p>
+      <p><a id="live-fallback-link" href="#" target="_blank" rel="noopener">Open the live page in a new tab</a></p>
+    </div>
+    <p class="muted"><a id="live-new-tab" href="#" target="_blank" rel="noopener">Open Live View in a new tab</a> &middot; Ending the session closes the remote browser and wipes it. Nothing is kept.</p>
   </section>
 
   <section class="card">
-    <h2>Session</h2>
-    <p class="muted">Links you opened in this session, stored only in your browser. Ending the session wipes them.</p>
-    <button class="btn btn-secondary" type="button" id="end-session">End session</button>
+    <h2>Links you opened</h2>
+    <p class="muted">Stored only in this browser. Clearing them removes them for good.</p>
+    <button class="btn btn-secondary" type="button" id="clear-history">Clear history</button>
     <div id="history"></div>
   </section>
 
   <section class="card">
     <h2>How it works</h2>
-    <p><strong>Stage 1, this build:</strong> a headless Chrome on Cloudflare's network opens the link and sends back a screenshot, the text, and the links. Your browser never touches the site.</p>
-    <p><strong>Stage 2, later:</strong> a full interactive browser streamed to you as video, where you can click and type. That needs a server running Chrome per session.</p>
-    <p class="muted">Limits: the remote browser is identifiable as automation, so some sites will block it. Sessions are short, and private or local addresses are blocked. Free Browser Run time is 10 minutes a day.</p>
+    <p><strong>Stage 1, safe preview:</strong> a headless Chrome on Cloudflare's network opens the link and sends back a screenshot, the text, and the links. Your browser never touches the site.</p>
+    <p><strong>Stage 2, interactive session:</strong> start a session and the live page is streamed to you in this window, so you can click and type inside it. End the session and the remote browser is closed and wiped.</p>
+    <p class="muted">Limits: the remote browser is identifiable as automation, so some sites will block it. Sessions last up to 20 minutes, and private or local addresses are blocked. Free Browser Run time is 10 minutes a day.</p>
   </section>
 </main>
 <footer class="footer">
