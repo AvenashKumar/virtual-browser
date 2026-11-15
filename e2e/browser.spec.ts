@@ -71,6 +71,7 @@ test.describe("Virtual Browser", () => {
     await page.locator("#url").fill("https://example.com");
     await page.locator("#open-btn").click();
     await expect(page.locator("#r-shot")).toBeVisible({ timeout: 60000 });
-    await expect(page.locator("#history")).toContainText("example.com");
+    // History rows show the page title, not the URL.
+    await expect(page.locator("#history")).toContainText("Example Domain");
   });
 });
