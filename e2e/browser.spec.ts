@@ -82,6 +82,7 @@ test.describe("Virtual Browser", () => {
 // they fail against a site that does not have the session endpoints yet.
 test.describe("Virtual Browser sessions", () => {
   let sessionId: string | null = null;
+  let startLiveViewUrl: string | null = null;
 
   test.afterAll(async () => {
     if (!sessionId) return;
@@ -106,7 +107,33 @@ test.describe("Virtual Browser sessions", () => {
     expect(data.liveViewUrl).toContain("live.browser.run");
     expect(data.expiresAt).toBeGreaterThan(Date.now());
     expect(data.safety.verdict).toBe("safe");
+    expect(data.lockedOrigin).toBe("https://example.com");
     sessionId = data.sessionId;
+    startLiveViewUrl = data.liveViewUrl;
+    await ctx.dispose();
+  });
+
+  test("share returns a fresh share URL with a short expiry @api", async () => {
+    test.skip(!sessionId, "no session from the start test");
+    const ctx = await api();
+    const res = await ctx.post(`${baseURL}/api/session/share`, { data: { sessionId } });
+    expect(res.status(), await res.text()).toBe(200);
+    const data = await res.json();
+    expect(data.shareUrl).toContain("live.browser.run");
+    expect(data.shareUrl).not.toBe(startLiveViewUrl);
+    expect(data.expiresInMs).toBe(300000);
+    expect(data.expiresAt).toBeGreaterThan(Date.now());
+    expect(data.expiresAt - Date.now()).toBeLessThanOrEqual(300000);
+    expect(data.lockedOrigin).toBe("https://example.com");
+    await ctx.dispose();
+  });
+
+  test("share for an unknown session returns 404 @api", async () => {
+    const ctx = await api();
+    const res = await ctx.post(`${baseURL}/api/session/share`, {
+      data: { sessionId: "00000000-0000-0000-0000-000000000000" },
+    });
+    expect(res.status()).toBe(404);
     await ctx.dispose();
   });
 
@@ -114,11 +141,22 @@ test.describe("Virtual Browser sessions", () => {
     test.skip(!sessionId, "no session from the start test");
     const ctx = await api();
     const res = await ctx.post(`${baseURL}/api/session/navigate`, {
-      data: { sessionId, url: "https://example.org" },
+      data: { sessionId, url: "https://www.example.com" },
     });
     expect(res.status(), await res.text()).toBe(200);
     const data = await res.json();
-    expect(data.url).toContain("example.org");
+    expect(data.url).toContain("example.com");
+    await ctx.dispose();
+  });
+
+  test("navigate outside the locked origin is blocked @api", async () => {
+    test.skip(!sessionId, "no session from the start test");
+    const ctx = await api();
+    const res = await ctx.post(`${baseURL}/api/session/navigate`, {
+      data: { sessionId, url: "https://example.org" },
+    });
+    expect(res.status()).toBe(403);
+    expect((await res.json()).error).toContain("locked to");
     await ctx.dispose();
   });
 
