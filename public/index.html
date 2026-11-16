@@ -88,7 +88,19 @@
     <div class="session-bar">
       <span class="timer" id="session-timer">20:00</span>
       <span class="muted" id="session-status">Session starting...</span>
+      <button class="btn btn-secondary" type="button" id="share-live-session">Share this session</button>
       <button class="btn btn-primary" type="button" id="end-live-session">End session</button>
+    </div>
+    <div id="share-box" class="fallback hidden">
+      <p><strong>Share this session</strong> <span class="muted" id="share-expires"></span></p>
+      <p class="muted" id="share-locked"></p>
+      <div class="share-row">
+        <input id="share-link" type="text" readonly aria-label="Share link">
+        <button class="btn btn-secondary" type="button" id="copy-share-link">Copy link</button>
+      </div>
+      <p><span id="share-copied" class="muted hidden">Copied.</span></p>
+      <p class="error">Anyone with this link controls this tab until the session ends. The link must be opened within 5 minutes. End session revokes it immediately.</p>
+      <p id="share-error" class="error hidden"></p>
     </div>
     <form id="session-nav-form" class="session-address">
       <input id="session-url" type="url" placeholder="https://example.com" required>
