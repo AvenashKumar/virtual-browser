@@ -189,6 +189,7 @@ test.describe("Virtual Browser sessions", () => {
     const data = await res.json();
     expect(typeof data.limits.allowedBrowserAcquisitions).toBe("number");
     expect(typeof data.limits.maxConcurrentSessions).toBe("number");
+    expect(data.limits.activeSessions).toBeUndefined();
     await ctx.dispose();
   });
 });
