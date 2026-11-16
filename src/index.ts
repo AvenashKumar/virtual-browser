@@ -415,13 +415,21 @@ export default {
 
     if (path === "/api/session/limits" && request.method === "GET") {
       try {
-        // The limits object carries activeSessions (with ids),
-        // allowedBrowserAcquisitions, maxConcurrentSessions, and
-        // timeUntilNextAllowedBrowserAcquisition. It does NOT expose
-        // remaining browser minutes, so a 429 on start stays the signal
-        // that the daily minutes are used up.
+        // The raw limits object carries activeSessions (with ids).
+        // Those ids must never leave the Worker: a session id is a
+        // bearer token, and anyone holding one could open, steer, or
+        // end that live session through the session endpoints, which
+        // have no other ownership check. So only the scalar fields
+        // the UI needs are returned. It does NOT expose remaining
+        // browser minutes, so a 429 on start stays the signal that
+        // the daily minutes are used up.
         const limits: any = await puppeteer.limits(env.BROWSER);
-        return json({ limits });
+        return json({ limits: {
+          allowedBrowserAcquisitions: limits.allowedBrowserAcquisitions,
+          maxConcurrentSessions: limits.maxConcurrentSessions,
+          timeUntilNextAllowedBrowserAcquisition: limits.timeUntilNextAllowedBrowserAcquisition,
+          usedBrowserTimeSeconds: limits.usedBrowserTimeSeconds,
+        } });
       } catch (e: any) {
         return json({ error: `Could not read account limits: ${e?.message || "unknown error"}` }, 502);
       }
