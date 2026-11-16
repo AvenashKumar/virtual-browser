@@ -17,6 +17,9 @@ const PREVIEW_TIMEOUT_MS = 20000;
 // minutes gives the frontend ample time to embed it after start returns.
 const SESSION_KEEP_ALIVE_MS = 1200000;
 const LIVE_VIEW_EXPIRES_MS = 600000;
+// A shared Live View link is deliberately short-lived: the person receiving
+// it has 5 minutes to open it. End session revokes it immediately.
+const SHARE_VIEW_EXPIRES_MS = 300000;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -133,10 +136,38 @@ function sessionUrl(body: any): Response | { openUrl: URL; safety: ReturnType<ty
 
 // Open a Live View URL in tab mode for a page already loaded in a session.
 // The returned devtoolsFrontendUrl is the URL the frontend embeds.
-async function liveViewUrl(page: any): Promise<string> {
+// expiresInMs is only the deadline for STARTING a connection with the URL.
+async function liveViewUrl(page: any, expiresInMs: number = LIVE_VIEW_EXPIRES_MS): Promise<string> {
   const cdp = await page.createCDPSession();
-  const liveView = await cdp.send("Cloudflare.getLiveView", { mode: "tab", expiresInMs: LIVE_VIEW_EXPIRES_MS });
+  const liveView = await cdp.send("Cloudflare.getLiveView", { mode: "tab", expiresInMs });
   return liveView.devtoolsFrontendUrl as string;
+}
+
+// Destination locking for sessions. Session guardrails are set when a
+// session is acquired and latched for its lifetime: they cannot be changed
+// or removed by later connections (see the Browser Run guardrails docs).
+// So every session is born locked to the origin it starts on, plus its
+// subdomains and the common-cdns set for page assets. A session can only
+// ever request that origin, which is what makes sharing it safe: the
+// person holding a share link cannot wander to another site. The trade-off
+// is that logins which redirect to an identity provider on another host,
+// and navigation to any other site, are blocked. A raw IP host has no
+// subdomains, so it is listed on its own.
+function sessionGuardrails(openUrl: URL): { allowedDomains: string[]; allowedDomainSets: string[] } {
+  const host = openUrl.hostname;
+  const allowedDomains = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? [host] : [host, `*.${host}`];
+  return { allowedDomains, allowedDomainSets: ["common-cdns"] };
+}
+
+// The origin a locked session may use. The session can only ever be on
+// that origin, so the current page URL is the locked origin.
+function lockedOriginOf(pageUrl: string): string | null {
+  try {
+    const u = new URL(pageUrl);
+    return u.protocol.startsWith("http") ? u.origin : null;
+  } catch {
+    return null;
+  }
 }
 
 export default {
@@ -226,11 +257,22 @@ export default {
 
       let browser: any = null;
       try {
-        browser = await puppeteer.launch(env.BROWSER, { keep_alive: SESSION_KEEP_ALIVE_MS });
+        // Locked to the start origin from birth: guardrails are latched
+        // at acquire and cannot be added later, so this is what makes a
+        // shared session safe.
+        browser = await puppeteer.launch(env.BROWSER, { keep_alive: SESSION_KEEP_ALIVE_MS, guardrails: sessionGuardrails(openUrl) });
         const page = await browser.newPage();
         await page.setViewport({ width, height });
         const response = await page.goto(openUrl.toString(), { waitUntil: "networkidle0", timeout: PREVIEW_TIMEOUT_MS }).catch(() => null);
         const title = await page.title().catch(() => "");
+        // A redirect to another host is blocked by the guardrails. The
+        // block answers 403 with cf-mitigated: guardrails, which is how
+        // it is told apart from a 403 from the site itself.
+        if (response && response.status() === 403 && response.headers()["cf-mitigated"] === "guardrails") {
+          await browser.close().catch(() => {});
+          browser = null;
+          return json({ error: `That link redirects to a site outside ${openUrl.origin}, and this session is locked to ${openUrl.origin}.`, safety }, 400);
+        }
         const cdp = await page.createCDPSession();
         const session = await cdp.send("Cloudflare.getSessionId");
         const viewUrl = await liveViewUrl(page);
@@ -245,6 +287,7 @@ export default {
           status: response ? response.status() : null,
           title,
           safety,
+          lockedOrigin: openUrl.origin,
         });
       } catch (e: any) {
         const msg = e?.message || "unknown error";
@@ -273,15 +316,70 @@ export default {
       try {
         const pages = await browser.pages();
         const page = pages[0] || (await browser.newPage());
-        await page.goto(openUrl.toString(), { waitUntil: "networkidle0", timeout: PREVIEW_TIMEOUT_MS }).catch(() => null);
+        // The session is locked to the origin it started on. The current
+        // page can only ever be on that origin, so it is the locked one.
+        // Refuse other origins here with a plain message instead of
+        // letting the guardrails answer 403.
+        const lockedOrigin = lockedOriginOf(page.url());
+        if (lockedOrigin && new URL(openUrl.toString()).origin !== lockedOrigin) {
+          return json({ error: `This session is locked to ${lockedOrigin}. That link goes somewhere else, so it was blocked.`, safety }, 403);
+        }
+        const navResponse = await page.goto(openUrl.toString(), { waitUntil: "networkidle0", timeout: PREVIEW_TIMEOUT_MS }).catch(() => null);
+        if (navResponse && navResponse.status() === 403 && navResponse.headers()["cf-mitigated"] === "guardrails") {
+          return json({ error: `This session is locked to ${lockedOrigin || "one site"}. That link goes somewhere else, so it was blocked.`, safety }, 403);
+        }
         const title = await page.title().catch(() => "");
         // A fresh Live View URL for the same target, in case the old one
         // stopped working. The client keeps its embedded URL unless it
         // needs to re-embed.
         const viewUrl = await liveViewUrl(page);
-        return json({ sessionId: body.sessionId, url: page.url(), title, liveViewUrl: viewUrl, safety });
+        return json({ sessionId: body.sessionId, url: page.url(), title, liveViewUrl: viewUrl, safety, lockedOrigin });
       } catch (e: any) {
         return json({ error: `Navigate failed: ${e?.message || "unknown error"}`, safety }, 502);
+      } finally {
+        // Disconnect only. browser.close() here would kill the session.
+        if (browser) await browser.disconnect().catch(() => {});
+      }
+    }
+
+    if (path === "/api/session/share" && request.method === "POST") {
+      const body = await request.json().catch(() => null) as any;
+      if (!body || typeof body.sessionId !== "string") return json({ error: "sessionId is required" }, 400);
+
+      let browser: any = null;
+      try {
+        browser = await puppeteer.connect(env.BROWSER, body.sessionId);
+      } catch {
+        const open: any[] = await puppeteer.sessions(env.BROWSER).catch(() => []);
+        const stillOpen = open.some((s) => s.sessionId === body.sessionId);
+        if (!stillOpen) return json({ error: "Session not found or already closed" }, 404);
+        return json({ error: "Could not connect to the session to share it" }, 502);
+      }
+      try {
+        const pages = await browser.pages();
+        const page = pages[0] || (await browser.newPage());
+        // A fresh Live View URL with a short fuse: the person receiving
+        // the link has 5 minutes to open it. The URL itself is never
+        // logged anywhere.
+        // Destination locking is NOT applied here: session guardrails are
+        // latched when the session is acquired, so the session was locked
+        // to its origin when it started. The lock is reported back so the
+        // frontend can state it.
+        // There is also no view-only option on this path: the Live View
+        // guardrails { mode: "readonly" } setting is REST API only. The
+        // CDP Cloudflare.getLiveView command takes only targetId, mode,
+        // and expiresInMs, so every shared link is a fully interactive
+        // one. The share box says so plainly.
+        const shareUrl = await liveViewUrl(page, SHARE_VIEW_EXPIRES_MS);
+        return json({
+          sessionId: body.sessionId,
+          shareUrl,
+          expiresAt: Date.now() + SHARE_VIEW_EXPIRES_MS,
+          expiresInMs: SHARE_VIEW_EXPIRES_MS,
+          lockedOrigin: lockedOriginOf(page.url()),
+        });
+      } catch (e: any) {
+        return json({ error: `Share failed: ${e?.message || "unknown error"}` }, 502);
       } finally {
         // Disconnect only. browser.close() here would kill the session.
         if (browser) await browser.disconnect().catch(() => {});
