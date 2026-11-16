@@ -12,6 +12,8 @@ let timerId = null;
 let frameTimer = null;
 let frameLoaded = false;
 let busy = false;
+let shareTimerId = null;
+let shareExpiresAt = 0;
 
 function setTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
@@ -270,6 +272,92 @@ async function startSession() {
 }
 $("start-session").addEventListener("click", startSession);
 
+// ---- Share this session ----
+// A share link is a fresh Live View URL with a 5 minute fuse. Anyone
+// holding it controls the tab, so the box says so plainly, and End
+// session revokes it at once. The session is locked to one site from
+// birth, so the link opens that site only. There is no view-only mode:
+// the Live View readonly setting is REST API only, and this Worker
+// generates links over CDP, which has no readonly option.
+
+function updateShareCountdown() {
+  if (!shareExpiresAt) return;
+  const left = shareExpiresAt - Date.now();
+  if (left > 0) {
+    $("share-expires").textContent = `Link expires in ${fmtTime(left)}.`;
+  } else {
+    $("share-expires").textContent = "That link has expired. Share again for a fresh one.";
+    stopShareCountdown();
+  }
+}
+function stopShareCountdown() {
+  if (shareTimerId) clearInterval(shareTimerId);
+  shareTimerId = null;
+  shareExpiresAt = 0;
+}
+async function shareSession() {
+  if (!liveSession) return;
+  const btn = $("share-live-session");
+  btn.disabled = true;
+  btn.textContent = "Sharing...";
+  $("share-error").classList.add("hidden");
+  $("share-copied").classList.add("hidden");
+  try {
+    const res = await fetch("/api/session/share", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: liveSession.sessionId }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      if (res.status === 404) {
+        clearLiveSessionLocal();
+        $("session-error").textContent = "That session is gone. Start a new session to keep going.";
+        $("session-error").classList.remove("hidden");
+        return;
+      }
+      $("share-box").classList.remove("hidden");
+      $("share-error").textContent = d.error || "Could not create a share link.";
+      $("share-error").classList.remove("hidden");
+      return;
+    }
+    $("share-link").value = d.shareUrl;
+    $("share-locked").textContent = d.lockedOrigin
+      ? `This session is locked to ${d.lockedOrigin}. The link opens that site only.`
+      : "This session is locked to one site. The link opens that site only.";
+    $("share-box").classList.remove("hidden");
+    stopShareCountdown();
+    shareExpiresAt = d.expiresAt || Date.now() + 5 * 60 * 1000;
+    updateShareCountdown();
+    shareTimerId = setInterval(updateShareCountdown, 1000);
+    await copyShareLink();
+  } catch (e) {
+    $("share-box").classList.remove("hidden");
+    $("share-error").textContent = "Could not create a share link. Check your connection and try again.";
+    $("share-error").classList.remove("hidden");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Share this session";
+  }
+}
+async function copyShareLink() {
+  const link = $("share-link");
+  const val = link.value;
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    $("share-copied").textContent = "Copied.";
+    $("share-copied").classList.remove("hidden");
+  } catch (e) {
+    // Clipboard unavailable: select the link so the visitor can copy it.
+    link.select();
+    $("share-copied").textContent = "The link is selected. Copy it manually.";
+    $("share-copied").classList.remove("hidden");
+  }
+}
+$("share-live-session").addEventListener("click", shareSession);
+$("copy-share-link").addEventListener("click", copyShareLink);
+
 $("session-nav-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!liveSession) return;
@@ -312,6 +400,10 @@ $("session-nav-form").addEventListener("submit", async (e) => {
 function clearLiveSessionLocal() {
   liveSession = null;
   stopTimer();
+  stopShareCountdown();
+  $("share-box").classList.add("hidden");
+  $("share-error").classList.add("hidden");
+  $("share-copied").classList.add("hidden");
   clearStoredSession();
   hideSessionPanel();
   refreshStartButton();
